@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Rate Calculator — Forte Import</title>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:system-ui,sans-serif;font-size:13px;background:#111;height:100vh;display:flex;flex-direction:column;overflow:hidden;color:#e0e0e0}
@@ -118,6 +119,27 @@ td.td-adj.zero{color:#555}
 
 /* Misc */
 .mark-unused{color:#333;font-style:italic}
+
+/* UPLOAD MODAL */
+#uploadOverlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:200;align-items:center;justify-content:center}
+#uploadOverlay.show{display:flex}
+.upload-modal{background:#1e1e1e;border:1px solid #333;border-radius:14px;padding:28px 32px;max-width:460px;width:92%;box-shadow:0 8px 40px rgba(0,0,0,.5)}
+.upload-modal h2{font-size:14px;font-weight:800;color:#fff;margin-bottom:6px}
+.upload-modal p{font-size:12px;color:#888;margin-bottom:18px;line-height:1.6}
+.drop-zone{border:2px dashed #333;border-radius:8px;padding:26px 20px;cursor:pointer;transition:border-color .2s,background .2s;margin-bottom:14px;text-align:center;background:#161616}
+.drop-zone:hover,.drop-zone.drag-over{border-color:#0a84ff;background:#0a1a2a}
+.drop-zone .drop-icon{font-size:28px;margin-bottom:6px}
+.drop-zone p{font-size:12px;color:#777;margin-top:4px}
+.upload-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:4px}
+.modal-cancel{padding:7px 18px;border:1px solid #444;border-radius:6px;background:transparent;color:#aaa;cursor:pointer;font-size:12px;font-weight:600}
+.modal-cancel:hover{background:#2a2a2a}
+#uploadStatus{font-size:12px;margin-top:10px;min-height:18px;text-align:center}
+#uploadStatus.err{color:#ff453a}
+#uploadStatus.ok{color:#30d158}
+.spec-box{background:#161616;border:1px solid #2a2a2a;border-radius:6px;padding:10px 14px;margin-bottom:16px;font-size:11px;color:#888;line-height:1.8}
+.spec-box strong{color:#aaa}
+.btn-upload{padding:5px 14px;background:#30d158;color:#111;border:none;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer}
+.btn-upload:hover{background:#25a244}
 </style>
 </head>
 <body>
@@ -141,9 +163,10 @@ td.td-adj.zero{color:#555}
     <h1>📊 Rate Calculator <span class="subtitle">— Forte Import</span></h1>
   </div>
   <div class="header-right">
+    <button class="btn-upload" onclick="showUpload()">⬆ Import from Excel</button>
     <button class="btn-secondary" onclick="resetAll()" title="Clear all rates">Reset</button>
     <button class="btn-primary" onclick="copyImport()">📋 Copy Import Data</button>
-    <button class="btn-primary" onclick="exportCSV()">⬇ Export CSV</button>
+    <button class="btn-primary" onclick="exportCSV()">⬇ Export OPAbC</button>
   </div>
 </div>
 
@@ -205,11 +228,37 @@ td.td-adj.zero{color:#555}
 <div class="pane" id="paneImport">
   <div class="import-toolbar">
     <button class="btn-primary" onclick="copyImport()">📋 Copy Forte Import Data</button>
-    <button class="btn-secondary" onclick="exportCSV()">⬇ Export CSV</button>
+    <button class="btn-secondary" onclick="exportCSV()">⬇ Export OPAbC</button>
     <span class="import-info" id="importInfo">500 rows × 28 cols (ODFL bands 000–499)</span>
   </div>
   <div class="import-wrap">
     <table class="import-table" id="importTable"></table>
+  </div>
+</div>
+
+<!-- UPLOAD MODAL -->
+<div id="uploadOverlay">
+  <div class="upload-modal">
+    <h2>⬆ Import Rates from Excel</h2>
+    <p>Upload your rate spreadsheet. The tool will read Admin and Pitch values per class per band and populate the Rate Calculator automatically.</p>
+    <div class="spec-box">
+      <strong>Expected format (any sheet name):</strong><br>
+      Row 1: Band headers (e.g. <em>0-125,000 / 125,001-150,000 / …</em>)<br>
+      Row 2: Column headers — <strong>Class, ADMIN, PITCH</strong> (or MARKUP+ADMIN) per band group<br>
+      Rows 3+: Class (0–12, 1T) followed by Admin and Pitch values per band<br>
+      <br>
+      <strong>Auto-detected column order per band:</strong> Admin · Markup · Retail · Pitch<br>
+      Bands are matched left-to-right to Band 1 → Band 5.
+    </div>
+    <div class="drop-zone" id="dropZone" onclick="document.getElementById('xlsxFile').click()">
+      <div class="drop-icon">📂</div>
+      <p><strong>Click to browse</strong> or drag &amp; drop your .xlsx file here</p>
+      <input type="file" id="xlsxFile" accept=".xlsx,.xls" style="display:none" onchange="handleFile(this.files[0])">
+    </div>
+    <div id="uploadStatus"></div>
+    <div class="upload-actions">
+      <button class="modal-cancel" onclick="hideUpload()">Cancel</button>
+    </div>
   </div>
 </div>
 
@@ -531,6 +580,146 @@ function copyImport(){
   const rows=buildImportRows();
   const tsv=rows.map(r=>r.join('\t')).join('\n');
   navigator.clipboard.writeText(tsv).then(()=>alert('Import data copied to clipboard (TSV).')).catch(()=>alert('Copy failed — try Export CSV instead.'));
+}
+
+// ── UPLOAD / IMPORT FROM EXCEL ────────────────────────────────────────────
+function showUpload(){
+  document.getElementById('uploadOverlay').classList.add('show');
+  document.getElementById('uploadStatus').textContent='';
+  document.getElementById('uploadStatus').className='';
+  document.getElementById('xlsxFile').value='';
+}
+function hideUpload(){
+  document.getElementById('uploadOverlay').classList.remove('show');
+}
+
+// Drag-and-drop on the drop zone
+(function(){
+  const dz = document.getElementById('dropZone');
+  if(!dz) return;
+  dz.addEventListener('dragover', e=>{ e.preventDefault(); dz.classList.add('drag-over'); });
+  dz.addEventListener('dragleave', ()=>dz.classList.remove('drag-over'));
+  dz.addEventListener('drop', e=>{ e.preventDefault(); dz.classList.remove('drag-over'); const f=e.dataTransfer.files[0]; if(f) handleFile(f); });
+})();
+
+function setStatus(msg, type){
+  const el = document.getElementById('uploadStatus');
+  el.textContent = msg;
+  el.className = type||'';
+}
+
+function handleFile(file){
+  if(!file){ setStatus('No file selected.','err'); return; }
+  if(!/\.(xlsx|xls)$/i.test(file.name)){ setStatus('Please upload a .xlsx or .xls file.','err'); return; }
+  setStatus('Reading file…','');
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const data = new Uint8Array(e.target.result);
+      const wb = XLSX.read(data, {type:'array'});
+      const sheetName = wb.SheetNames[0];
+      const ws = wb.Sheets[sheetName];
+      const rows = XLSX.utils.sheet_to_json(ws, {header:1, defval:null});
+      parseAndLoad(rows, file.name);
+    } catch(err){
+      setStatus('Error reading file: '+err.message,'err');
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function parseAndLoad(rows, filename){
+  // Find the header row — the row containing 'Class' (case-insensitive)
+  let headerRowIdx = -1;
+  for(let i=0;i<Math.min(rows.length,6);i++){
+    const r = rows[i];
+    if(r && r.some(c=>c!==null&&String(c).trim().toUpperCase()==='CLASS')){
+      headerRowIdx = i; break;
+    }
+  }
+  if(headerRowIdx<0){ setStatus('Could not find a "Class" column header in the first 6 rows.','err'); return; }
+
+  const headerRow = rows[headerRowIdx].map(c=>c===null?'':String(c).trim().toUpperCase());
+  const classColIdx = headerRow.indexOf('CLASS');
+
+  // Identify band column groups by scanning header row for ADMIN occurrences
+  // Each band group = [adminCol, pitchCol]  — we look for pairs of ADMIN … PITCH
+  // Strategy: find all ADMIN cols, then find the next PITCH col after each
+  const bandGroups = []; // [{adminCol, pitchCol}]
+  let scanFrom = classColIdx+1;
+  while(scanFrom < headerRow.length && bandGroups.length < NUM_BANDS){
+    const aIdx = headerRow.indexOf('ADMIN', scanFrom);
+    if(aIdx<0) break;
+    // Find PITCH after this ADMIN
+    let pIdx = -1;
+    for(let k=aIdx+1;k<Math.min(aIdx+6,headerRow.length);k++){
+      if(headerRow[k]==='PITCH'){ pIdx=k; break; }
+    }
+    if(pIdx<0){ scanFrom=aIdx+1; continue; }
+    bandGroups.push({adminCol:aIdx, pitchCol:pIdx});
+    scanFrom = pIdx+1;
+  }
+
+  if(bandGroups.length===0){ setStatus('Could not detect any Admin/Pitch band column groups.','err'); return; }
+
+  // Parse data rows
+  let loaded=0, skipped=0;
+  const dataRows = rows.slice(headerRowIdx+1);
+  dataRows.forEach(row=>{
+    if(!row||row.length===0) return;
+    const rawCls = row[classColIdx];
+    if(rawCls===null||rawCls===undefined||String(rawCls).trim()==='') return;
+    const cls = String(rawCls).trim();
+    if(!CLASSES.includes(cls)){ skipped++; return; }
+
+    bandGroups.forEach((g, bi)=>{
+      if(bi>=NUM_BANDS) return;
+      const admin = row[g.adminCol];
+      const pitch = row[g.pitchCol];
+      if(admin!==null&&admin!==undefined&&String(admin).trim()!==''){
+        rates[cls][bi].admin = parseFloat(admin)||'';
+      }
+      if(pitch!==null&&pitch!==undefined&&String(pitch).trim()!==''){
+        rates[cls][bi].pitch = parseFloat(pitch)||'';
+      }
+    });
+    loaded++;
+  });
+
+  // Also try to detect band ranges from the band header row (row above headers)
+  if(headerRowIdx>0){
+    const bandLabelRow = rows[headerRowIdx-1];
+    if(bandLabelRow){
+      let detected=0;
+      bandGroups.forEach((g, bi)=>{
+        // Find the band label cell at or before adminCol
+        for(let k=g.adminCol;k>=classColIdx+1;k--){
+          const cell = bandLabelRow[k];
+          if(cell!==null&&cell!==undefined&&String(cell).trim()!==''){
+            // Try to parse "0-125,000" or "125,001 - 150,000" style
+            const txt = String(cell).replace(/,/g,'').replace(/\s/g,'');
+            const m = txt.match(/(\d+)[-–](\d+)/);
+            if(m){
+              const from=parseInt(m[1]), to=parseInt(m[2]);
+              if(!isNaN(from)&&!isNaN(to)){
+                bands[bi].from=from; bands[bi].to=to; detected++;
+              }
+            }
+            break;
+          }
+        }
+      });
+      // Clear any unused bands beyond detected
+      for(let i=bandGroups.length;i<NUM_BANDS;i++){
+        bands[i].from=null; bands[i].to=null;
+      }
+    }
+  }
+
+  if(loaded===0){ setStatus('No matching class rows found (expected 0–12, 1T).','err'); return; }
+  setStatus(`✓ Loaded ${loaded} classes across ${bandGroups.length} band(s) from "${filename}"${skipped?' ('+skipped+' rows skipped)':''}`, 'ok');
+  refresh();
+  setTimeout(()=>hideUpload(), 1400);
 }
 
 // ── INIT ──────────────────────────────────────────────────────────────────
