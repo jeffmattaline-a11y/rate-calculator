@@ -165,7 +165,6 @@ td.td-adj.zero{color:#555}
   <div class="header-right">
     <button class="btn-upload" onclick="showUpload()">⬆ Import from Excel</button>
     <button class="btn-secondary" onclick="resetAll()" title="Clear all rates">Reset</button>
-    <button class="btn-primary" onclick="copyImport()">📋 Copy Import Data</button>
     <button class="btn-primary" onclick="exportCSV()">⬇ Export OPAbC</button>
   </div>
 </div>
@@ -173,7 +172,6 @@ td.td-adj.zero{color:#555}
 <!-- TABS -->
 <div class="tabbar">
   <div class="tab active" id="tab-calc" onclick="switchTab('calc')">Rate Calculator</div>
-  <div class="tab" id="tab-setup" onclick="switchTab('setup')">Setup / Markup Summary</div>
   <div class="tab" id="tab-import" onclick="switchTab('import')">Forte Import</div>
 </div>
 
@@ -205,30 +203,11 @@ td.td-adj.zero{color:#555}
 </div>
 
 <!-- PANE: SETUP / MARKUP SUMMARY -->
-<div class="pane" id="paneSetup">
-  <div class="setup-card">
-    <h2>Mileage Band Configuration</h2>
-    <table class="setup-table" id="setupBandTable">
-      <thead><tr><th>Band</th><th>From</th><th>To (entered)</th><th>→ Snaps to</th></tr></thead>
-      <tbody></tbody>
-    </table>
-  </div>
-  <div class="setup-card" style="flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden">
-    <h2>Loaded Markup &amp; OdomProfit Adjustments by Class</h2>
-    <div style="overflow:auto;flex:1">
-      <table class="setup-table" id="setupMarkupTable">
-        <thead></thead>
-        <tbody></tbody>
-      </table>
-    </div>
-  </div>
-</div>
 
 <!-- PANE: FORTE IMPORT -->
 <div class="pane" id="paneImport">
   <div class="import-toolbar">
-    <button class="btn-primary" onclick="copyImport()">📋 Copy Forte Import Data</button>
-    <button class="btn-secondary" onclick="exportCSV()">⬇ Export OPAbC</button>
+    <button class="btn-primary" onclick="exportCSV()">⬇ Export OPAbC</button>
     <span class="import-info" id="importInfo">500 rows × 28 cols (ODFL bands 000–499)</span>
   </div>
   <div class="import-wrap">
