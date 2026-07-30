@@ -44,19 +44,14 @@ body{font-family:system-ui,sans-serif;font-size:13px;background:#111;height:100v
 .section-card{background:#1e1e1e;border:1px solid #2a2a2a;border-radius:10px;padding:14px 18px}
 .section-card h2{font-size:12px;font-weight:800;color:#aaa;letter-spacing:.8px;text-transform:uppercase;margin-bottom:12px;border-bottom:1px solid #2a2a2a;padding-bottom:8px}
 
-/* Band config */
-.band-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}
-.band-col{background:#161616;border:1px solid #2a2a2a;border-radius:8px;padding:10px 12px}
-.band-col label{display:block;font-size:10px;font-weight:700;color:#666;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}
-.band-col.active-band{border-color:#0a84ff44}
-.band-col.active-band label{color:#0a84ff}
-.band-num-inputs{display:flex;flex-direction:column;gap:5px}
-.num-row{display:flex;align-items:center;gap:6px}
-.num-row span{font-size:10px;color:#555;width:54px;flex-shrink:0}
-.num-row input{flex:1;background:#111;border:1px solid #333;color:#e0e0e0;border-radius:5px;padding:4px 7px;font-size:12px;text-align:right;outline:none;min-width:0}
-.num-row input:focus{border-color:#0a84ff}
-.snap-row{display:flex;align-items:center;gap:6px;margin-top:2px}
-.snap-row span{font-size:10px;color:#555;width:54px;flex-shrink:0}
+/* Unified band header rows inside the table */
+.band-section-title-row td{position:sticky;top:0;z-index:6}
+.band-label-row td,.band-input-row td{position:sticky;z-index:5}
+.band-label-row td{top:29px}  /* offset below title row */
+.band-input-row:nth-of-type(3) td{top:75px}
+.band-input-row:nth-of-type(4) td{top:99px}
+.band-input-row:nth-of-type(5) td{top:123px}
+.band-input-row td input:focus{border-color:#0a84ff!important}
 .snap-val{font-size:12px;color:#555;font-style:italic}
 
 /* Class rate grid */
@@ -178,23 +173,11 @@ td.td-adj.zero{color:#555}
 <!-- PANE: RATE CALCULATOR -->
 <div class="pane active" id="paneCalc">
 
-  <!-- Band config -->
-  <div class="section-card">
-    <h2>Mileage Bands</h2>
-    <div class="band-grid" id="bandGrid">
-      <!-- Rendered by JS -->
-    </div>
-  </div>
-
-  <!-- Class rate grid -->
-  <div class="section-card" style="flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden">
-    <h2>Admin / Pitch by Class & Band</h2>
+  <!-- Unified band config + class rate grid -->
+  <div class="section-card" style="flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden;padding-bottom:0">
     <div style="overflow:auto;flex:1">
-      <table class="class-table">
-        <colgroup>
-          <col class="c-cls">
-          <!-- band cols inserted by JS -->
-        </colgroup>
+      <table class="class-table" id="unifiedTable">
+        <colgroup id="unifiedColgroup"></colgroup>
         <thead id="classHead"></thead>
         <tbody id="classBody"></tbody>
       </table>
@@ -329,39 +312,84 @@ function importVal(cls, odoRow){
 // ── RENDERING ──────────────────────────────────────────────────────────────
 
 function renderBandGrid(){
-  const grid = document.getElementById('bandGrid');
-  grid.innerHTML = '';
-  for(let i=0;i<NUM_BANDS;i++){
-    const b = bands[i];
-    const active = bandActive(i);
-    const snap = active ? snapTo(parseFloat(b.to)) : null;
-    const div = document.createElement('div');
-    div.className = 'band-col' + (active?' active-band':'');
-    div.innerHTML = `
-      <label>Band ${i+1}${i===4?' (unused)':''}</label>
-      <div class="band-num-inputs">
-        <div class="num-row">
-          <span>From</span>
-          <input type="number" min="0" data-band="${i}" data-field="from" value="${b.from??''}" placeholder="miles" onchange="onBandChange(${i},'from',this.value)" oninput="onBandInput(${i},'from',this.value)">
-        </div>
-        <div class="num-row">
-          <span>To</span>
-          <input type="number" min="0" data-band="${i}" data-field="to" value="${b.to??''}" placeholder="miles" onchange="onBandChange(${i},'to',this.value)" oninput="onBandInput(${i},'to',this.value)">
-        </div>
-        <div class="snap-row">
-          <span>Snaps to</span>
-          <span class="snap-val" id="snap-${i}">${snap!==null?snap.toLocaleString():'—'}</span>
-        </div>
-      </div>`;
-    grid.appendChild(div);
-  }
+  // Bands are now rendered inline inside renderClassTable thead — nothing to do here.
 }
 
 function renderClassTable(){
   const head = document.getElementById('classHead');
   const body = document.getElementById('classBody');
 
-  // Build header
+  // ── BAND CONFIG ROWS (sit above column headers, perfectly aligned) ──────
+  // Row B0: section title spanning everything
+  const totalBandCols = NUM_BANDS * 4; // 3 data + 1 sep per band
+  const trailingCols = 1 + NUM_BANDS; // LM + OdAdj cols
+  const totalCols = 1 + totalBandCols + trailingCols;
+
+  let bRow0 = `<tr class="band-section-title-row">
+    <td colspan="${totalCols}" style="background:#161616;padding:8px 14px 4px;font-size:11px;font-weight:800;color:#aaa;letter-spacing:.8px;text-transform:uppercase;border-bottom:1px solid #2a2a2a;">
+      Mileage Bands
+    </td>
+  </tr>`;
+
+  // Row B1: band label cells (one per band group, spanning 3 cols each, + sep)
+  let bRow1 = `<tr class="band-label-row"><td style="background:#161616;border-right:1px solid #2a2a2a"></td>`;
+  for(let i=0;i<NUM_BANDS;i++){
+    const active = bandActive(i);
+    const b = bands[i];
+    const snap = active ? snapTo(parseFloat(b.to)) : null;
+    const bg = active ? '#1a3050' : '#161616';
+    const color = active ? '#90caf9' : '#333';
+    const subcolor = active ? '#3d6080' : '#2a2a2a';
+    const label = `Band ${i+1}${!active?' <span style="font-size:9px;color:#333">(unused)</span>':''}`;
+    const sub = active ? `<div style="font-size:9px;color:${subcolor};font-weight:600;margin-top:1px">${Number(b.from).toLocaleString()}–${snap!==null?snap.toLocaleString():'?'} mi</div>` : '';
+    bRow1 += `<td colspan="3" style="background:${bg};padding:7px 8px 5px;text-align:center;border-left:2px solid #0a84ff44;border-top:2px solid ${active?'#0a84ff44':'#2a2a2a'};border-right:1px solid #2a2a2a">
+      <div style="font-size:10px;font-weight:800;color:${color};letter-spacing:.5px">${label}</div>${sub}
+    </td><td style="background:#111;border:none"></td>`;
+  }
+  bRow1 += `<td style="background:#161616"></td>`;
+  for(let i=0;i<NUM_BANDS;i++) bRow1 += `<td style="background:#161616"></td>`;
+  bRow1 += `</tr>`;
+
+  // Rows B2–B4: From / To / Snaps to — one row each, inputs aligned under their band cols
+  const fieldDefs = [
+    { key:'from',  label:'From',     isSnap:false },
+    { key:'to',    label:'To',       isSnap:false },
+    { key:'snap',  label:'Snaps to', isSnap:true  },
+  ];
+  let bandInputRows = '';
+  fieldDefs.forEach(({key, label, isSnap}) => {
+    let row = `<tr class="band-input-row"><td style="background:#161616;padding:3px 8px;font-size:10px;color:#555;text-align:right;white-space:nowrap;border-right:1px solid #2a2a2a">${label}</td>`;
+    for(let i=0;i<NUM_BANDS;i++){
+      const active = bandActive(i);
+      const b = bands[i];
+      const snap = active ? snapTo(parseFloat(b.to)) : null;
+      const bg = active ? '#131d2a' : '#161616';
+      const borderL = `border-left:2px solid ${active?'#0a84ff33':'#2a2a2a'}`;
+      let cell = '';
+      if(isSnap){
+        cell = `<span class="snap-val" id="snap-${i}" style="font-size:12px;color:#555;font-style:italic">${snap!==null?snap.toLocaleString():'—'}</span>`;
+      } else {
+        const val = b[key]!==null&&b[key]!==''?b[key]:'';
+        cell = `<input type="number" min="0" data-band="${i}" data-field="${key}" value="${val}" placeholder="miles"
+          onchange="onBandChange(${i},'${key}',this.value)" oninput="onBandInput(${i},'${key}',this.value)"
+          style="width:100%;background:#111;border:1px solid #333;color:#e0e0e0;border-radius:4px;padding:3px 6px;font-size:12px;text-align:right;outline:none">`;
+      }
+      // span 3 cols; center content in middle col
+      row += `<td style="background:${bg};${borderL};padding:3px 2px 3px 8px">${cell}</td>`;
+      row += `<td style="background:${bg};padding:3px 2px"></td>`;
+      row += `<td style="background:${bg};padding:3px 8px 3px 2px;border-right:1px solid #2a2a2a"></td>`;
+      row += `<td style="background:#111;border:none"></td>`;
+    }
+    row += `<td style="background:#161616"></td>`;
+    for(let i=0;i<NUM_BANDS;i++) row += `<td style="background:#161616"></td>`;
+    row += `</tr>`;
+    bandInputRows += row;
+  });
+
+  // Spacer row between band config and column headers
+  let spacerRow = `<tr><td colspan="${totalCols}" style="height:6px;background:#111;border-bottom:2px solid #333"></td></tr>`;
+
+  // ── COLUMN HEADER ROWS ───────────────────────────────────────────────────
   let hRow1 = '<tr><th class="th-cls" rowspan="2">Class</th>';
   let hRow2 = '<tr>';
   for(let i=0;i<NUM_BANDS;i++){
@@ -376,12 +404,12 @@ function renderClassTable(){
   }
   hRow1 += '<th style="background:#2a1a00;color:#ffd60a;min-width:64px">Loaded<br>Markup</th>';
   hRow2 += '<th style="background:#2a1a00;color:#ffd60a"></th>';
-  // OdomProfit adj cols
   for(let i=0;i<NUM_BANDS;i++){
     hRow1 += `<th style="background:#1a2a1a;color:#a5d6a7;min-width:52px">B${i+1}<br>OdAdj</th>`;
     hRow2 += `<th style="background:#1a2a1a;color:#a5d6a7"></th>`;
   }
-  head.innerHTML = hRow1+'</tr>'+hRow2+'</tr>';
+
+  head.innerHTML = bRow0 + bRow1 + bandInputRows + spacerRow + hRow1+'</tr>'+hRow2+'</tr>';
 
   // Build body
   let html = '';
