@@ -370,14 +370,12 @@ function renderClassTable(){
         cell = `<span class="snap-val" id="snap-${i}" style="font-size:12px;color:#555;font-style:italic">${snap!==null?snap.toLocaleString():'—'}</span>`;
       } else {
         const val = b[key]!==null&&b[key]!==''?b[key]:'';
-        cell = `<input type="number" min="0" data-band="${i}" data-field="${key}" value="${val}" placeholder="miles"
+        cell = `<input type="text" inputmode="numeric" pattern="[0-9]*" data-band="${i}" data-field="${key}" value="${val}" placeholder="type miles"
           onchange="onBandChange(${i},'${key}',this.value)" oninput="onBandInput(${i},'${key}',this.value)"
-          style="width:100%;background:#111;border:1px solid #333;color:#e0e0e0;border-radius:4px;padding:3px 6px;font-size:12px;text-align:right;outline:none">`;
+          style="width:100%;background:#111;border:1px solid #333;color:#e0e0e0;border-radius:4px;padding:5px 8px;font-size:13px;text-align:right;outline:none">`;
       }
-      // span 3 cols; center content in middle col
-      row += `<td style="background:${bg};${borderL};padding:3px 2px 3px 8px">${cell}</td>`;
-      row += `<td style="background:${bg};padding:3px 2px"></td>`;
-      row += `<td style="background:${bg};padding:3px 8px 3px 2px;border-right:1px solid #2a2a2a"></td>`;
+      // merge the 3 band sub-columns into one wide cell so the field has real room to type in
+      row += `<td colspan="3" style="background:${bg};${borderL};border-right:1px solid #2a2a2a;padding:4px 8px">${cell}</td>`;
       row += `<td style="background:#111;border:none"></td>`;
     }
     row += `<td style="background:#161616"></td>`;
@@ -519,15 +517,22 @@ function renderImport(){
 
 // ── EVENT HANDLERS ──────────────────────────────────────────────────────────
 function onBandChange(i, field, val){
-  bands[i][field] = val===''||val===null?null:parseFloat(val);
+  const cleaned = String(val).replace(/[^0-9]/g,'');
+  bands[i][field] = cleaned===''?null:parseFloat(cleaned);
   refresh();
 }
 function onBandInput(i, field, val){
-  bands[i][field] = val===''||val===null?null:parseFloat(val);
+  // strip anything that isn't a digit as the user types — no letters, commas, decimals
+  const cleaned = String(val).replace(/[^0-9]/g,'');
+  if(cleaned !== val){
+    const el = document.querySelector(`input[data-band="${i}"][data-field="${field}"]`);
+    if(el) el.value = cleaned;
+  }
+  bands[i][field] = cleaned===''?null:parseFloat(cleaned);
   // Update snap live
   const snap = bandActive(i)?snapTo(parseFloat(bands[i].to)):null;
-  const el=document.getElementById('snap-'+i);
-  if(el) el.textContent = snap!==null?snap.toLocaleString():'—';
+  const el2=document.getElementById('snap-'+i);
+  if(el2) el2.textContent = snap!==null?snap.toLocaleString():'—';
 }
 function onRateChange(cls, bandIdx, field, val){
   rates[cls][bandIdx][field] = val;
